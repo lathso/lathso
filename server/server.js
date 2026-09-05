@@ -45,19 +45,22 @@ const firebaseAuth = getAuth();
    RAZORPAY
    ===================================================== */
 
+let razorpay = null;
+
 if (
-  !process.env.RAZORPAY_KEY_ID ||
-  !process.env.RAZORPAY_KEY_SECRET
+  process.env.RAZORPAY_KEY_ID &&
+  process.env.RAZORPAY_KEY_SECRET
 ) {
+  razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+  console.log("Razorpay credentials configured ✅");
+} else {
   console.warn(
-    "Razorpay credentials are missing ⚠️"
+    "Razorpay credentials are not configured yet. Payment endpoints will remain disabled until the keys are added. ⚠️"
   );
 }
-
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
 
 
 /* =====================================================
@@ -424,6 +427,12 @@ async function fulfillVerifiedPayment({
   orderData,
   source,
 }) {
+  if (!razorpay) {
+    throw new Error(
+      "Razorpay is not configured on the backend yet."
+    );
+  }
+
   if (
     !orderData ||
     orderData.fulfilled === true
@@ -930,6 +939,14 @@ app.post(
          CREATE RAZORPAY ORDER
          =============================================== */
 
+      if (!razorpay) {
+        return res.status(503).json({
+          success: false,
+          message:
+            "Razorpay payment gateway is not configured yet. Please add Razorpay API keys to the backend environment."
+        });
+      }
+
       const order =
         await razorpay.orders.create({
           amount,
@@ -1117,6 +1134,14 @@ app.post(
       /* =============================================
          SIGNATURE VERIFICATION
          ============================================= */
+
+      if (!razorpay || !process.env.RAZORPAY_KEY_SECRET) {
+        return res.status(503).json({
+          success: false,
+          message:
+            "Razorpay payment gateway is not configured yet."
+        });
+      }
 
       const generatedSignature =
         crypto
